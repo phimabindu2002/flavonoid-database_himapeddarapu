@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flavonoid Database</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { text-align: center; color: #2d3748; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #718096; margin-bottom: 25px; }
+        .search-box {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .search-box:focus { outline: none; border-color: #667eea; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+        .card img {
+            width: 100%;
+            height: 150px;
+            object-fit: contain;
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .card h3 { 
+            color: #2d3748; 
+            font-size: 0.95rem; 
+            margin: 10px 0 5px;
+            word-break: break-word;
+        }
+        .card .info { font-size: 0.8rem; color: #4a5568; }
+        .detail {
+            display: none;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .detail.active { display: block; }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .detail-grid .info { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; }
+        .detail-grid .info-item { padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .detail-grid img { max-width: 100%; max-height: 250px; border-radius: 8px; background: white; padding: 10px; }
+        .no-results { text-align: center; padding: 40px; color: #718096; }
+        .suggestions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
+        .suggestion {
+            padding: 8px 18px;
+            background: #edf2f7;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .suggestion:hover { background: #667eea; color: white; }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            display: none;
+        }
+        .status.success { background: #c6f6d5; color: #22543d; display: block; }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+        .loading i {
+            font-size: 2rem;
+            color: #667eea;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @media (max-width: 768px) {
+            .detail-grid { grid-template-columns: 1fr; }
+            .container { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Flavonoid Database</h1>
+        <p class="subtitle">Search by name, formula, SMILES, or elements</p>
+
+        <input type="text" id="search" class="search-box" placeholder="Search by name, formula, SMILES, elements...">
+
+        <div id="loading" class="loading">
+            <i class="fas fa-spinner"></i>
+            <p style="margin-top: 10px; color: #4a5568;">Loading database...</p>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div id="detail" class="detail"></div>
+        <div id="results" class="grid"></div>
+        <div id="noResults" class="no-results" style="display:none;">
+            <p>No compounds found.</p>
+            <div class="suggestions">
+                <span class="suggestion" onclick="searchTerm('Chloro')">Chloro</span>
+                <span class="suggestion" onclick="searchTerm('pyrimidine')">pyrimidine</span>
+                <span class="suggestion" onclick="searchTerm('C,H,Cl,F,N,O')">Elements</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script>
+        // ============================================
+        // 🔧 CONFIGURATION
+        // ============================================
+        const IMAGE_FOLDER = './images/';
+        
+        // ============================================
+        // 📊 ALL YOUR 95 COMPOUNDS - EMBEDDED HERE
+        // ============================================
+        const compoundsData = [
+ {
+        name: "Chloro-fluorophenyl urea phthalimide",
+        smiles: "O=C(Nc1ccc(ON2C(=O)c3ccccc3C2=O)cc1)Nc1ccc(Cl)c(F)c1",
+        formula: "C21H13ClFN3O4",
+        weight: "437.79",
+        heavyAtoms: "31",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro-difluoromethyl methoxypyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1ccc(CF)cc1F",
+        formula: "C29H23ClF2N4O3",
+        weight: "548.97",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-difluoro methoxypyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1ccc(F)cc1F",
+        formula: "C28H21ClF3N4O3",
+        weight: "552.94",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-difluoro methoxypyrimidine urea",
+        smiles: "O=C(Nc1ccc(Cl)c(F)c1)Nc1ccc(Oc2cccc(C(=O)ON3C(=O)c4ccccc4C3=O)c2)cc1",
+        formula: "C28H18ClFN4O6",
+        weight: "560.91",
+        heavyAtoms: "40",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy benzyl urea",
+        smiles: "COc1cc(NC(=O)Nc2ccc(Cl)c(F)c2)ccc1Cc1ccccc1",
+        formula: "C22H20ClFN2O2",
+        weight: "398.86",
+        heavyAtoms: "28",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy styryl urea",
+        smiles: "C=C(c1ccccc1)c1ccc(NC(=O)Nc2ccc(Cl)c(CF)c2)cc1OC",
+        formula: "C24H22ClFN2O2",
+        weight: "424.89",
+        heavyAtoms: "31",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro dimethoxy benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1ccccc1OC",
+        formula: "C29H25ClFN4O4",
+        weight: "547.98",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro dimethoxy benzoyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=O)c1ccccc1OC",
+        formula: "C29H23ClFN4O5",
+        weight: "561.96",
+        heavyAtoms: "40",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy pyrimidine urea",
+        smiles: "COc1ccc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cn1",
+        formula: "C20H16ClFN4O3",
+        weight: "414.81",
+        heavyAtoms: "29",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methyl-fluorophenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1ccc(F)cc1C",
+        formula: "C27H22ClF2N4O3",
+        weight: "523.94",
+        heavyAtoms: "38",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy dimethylphenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1ccc(C)cc1C",
+        formula: "C28H25ClFN4O3",
+        weight: "519.97",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy trimethylphenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1c(C)cc(C)cc1C",
+        formula: "C29H27ClFN4O3",
+        weight: "533.99",
+        heavyAtoms: "38",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy trifluorophenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1c(F)cc(F)cc1F",
+        formula: "C26H18ClF4N4O3",
+        weight: "545.89",
+        heavyAtoms: "38",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy pentafluorophenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1c(F)c(F)c(F)c(F)c1F",
+        formula: "C26H16ClF6N4O3",
+        weight: "581.87",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy phenacyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CC(=O)c1ccccc1",
+        formula: "C27H21ClFN4O4",
+        weight: "519.93",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy benzoyloxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1OC(=O)c1ccccc1",
+        formula: "C26H19ClFN4O5",
+        weight: "521.9",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy pentafluorobenzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1c(F)c(F)c(F)c(F)c1F",
+        formula: "C26H16ClF6N4O3",
+        weight: "581.87",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy fluoromethylphenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1ccccc1CF",
+        formula: "C28H22ClF2N4O3",
+        weight: "535.94",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy trifluoromethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(F)(F)F",
+        formula: "C20H14ClF4N4O3",
+        weight: "469.79",
+        heavyAtoms: "32",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methylphenyl pyrimidine acetamide",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Cc3ccc(Cl)c(F)c3)cc2)cc1-c1ccc(C)cc1",
+        formula: "C28H23ClFN3O3",
+        weight: "503.95",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy pyridinyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1-c1ccncc1",
+        formula: "C24H18ClFN5O3",
+        weight: "477.87",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy dimethyl-dimethoxyphenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1-c1cc(C)c(OC)c(C)c1",
+        formula: "C30H29ClFN4O5",
+        weight: "579.02",
+        heavyAtoms: "41",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl phenyl urea maleimide",
+        smiles: "O=C(Nc1ccc(ON2C(=O)C=CC2=O)cc1)Nc1ccc(Cl)c(CF)c1",
+        formula: "C18H12ClFN3O4",
+        weight: "373.75",
+        heavyAtoms: "28",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy dimethoxy pyrimidine urea",
+        smiles: "COc1ccc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2OC)cn1",
+        formula: "C22H21ClFN4O5",
+        weight: "475.87",
+        heavyAtoms: "34",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy piperidinone styryl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(/C=C1\CCN(C)C1=O)c1ccccc1",
+        formula: "C33H29ClFN5O4",
+        weight: "613.06",
+        heavyAtoms: "44",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy cyclopentylidene benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=C1CCCC1)c1ccccc1",
+        formula: "C32H28ClFN4O3",
+        weight: "571.03",
+        heavyAtoms: "41",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl dichlorophenyl methoxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1Cc1ccc(Cl)cc1Cl",
+        formula: "C27H21Cl3FN4O3",
+        weight: "574.83",
+        heavyAtoms: "40",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl vinyl methoxy pyrimidine urea",
+        smiles: "C=Cc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cnc1OC",
+        formula: "C23H21ClFN4O3",
+        weight: "455.88",
+        heavyAtoms: "32",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro heptyloxy methoxy pyrimidine urea",
+        smiles: "CCCCCCCOc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C27H32ClFN4O4",
+        weight: "530.02",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro hexyloxy methylphenyl methoxy pyrimidine urea",
+        smiles: "CCCCCCOc1ccc(-c2cc(Oc3ccc(NC(=O)Nc4ccc(Cl)c(F)c4)cc3)cnc2OC)cc1C",
+        formula: "C34H37ClFN4O4",
+        weight: "619.13",
+        heavyAtoms: "43",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl vinylamino methoxy pyrimidine urea",
+        smiles: "C=CNc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cnc1OC",
+        formula: "C23H22ClFN5O3",
+        weight: "470.9",
+        heavyAtoms: "34",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy methylcarboxylate pyrimidine urea",
+        smiles: "COC(=O)c1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cnc1OC",
+        formula: "C24H21ClFN4O6",
+        weight: "515.89",
+        heavyAtoms: "36",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methylacetate pyrimidine urea",
+        smiles: "COC(=O)Cc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C25H23ClFN4O6",
+        weight: "529.92",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methylamino methoxy pyrimidine urea",
+        smiles: "CNc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C20H18ClFN5O3",
+        weight: "429.83",
+        heavyAtoms: "31",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro dimethylamino methoxy pyrimidine urea hydrochloride",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1N(C)C.Cl",
+        formula: "C21H20Cl2FN5O3",
+        weight: "480.32",
+        heavyAtoms: "33",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methylthio methoxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1SC",
+        formula: "C20H17ClFN4O3S",
+        weight: "447.88",
+        heavyAtoms: "31",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro ethylthio methoxy pyrimidine urea",
+        smiles: "CCSc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C21H19ClFN4O3S",
+        weight: "461.91",
+        heavyAtoms: "32",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy methyldisulfanyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1SSC",
+        formula: "C21H19ClFN4O3S2",
+        weight: "493.98",
+        heavyAtoms: "33",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy phenylthio pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Sc1ccccc1",
+        formula: "C25H19ClFN4O3S",
+        weight: "509.96",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl piperazinyl methoxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1N1CCNCC1",
+        formula: "C25H26ClFN6O3",
+        weight: "511.96",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro hexylpiperazinyl methoxy pyrimidine urea",
+        smiles: "CCCCCCN1CCN(c2cc(Oc3ccc(NC(=O)Nc4ccc(Cl)c(F)c4)cc3)cnc2OC)CC1",
+        formula: "C32H40ClFN6O3",
+        weight: "595.15",
+        heavyAtoms: "43",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro morpholinyl methoxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1N1CCOCC1",
+        formula: "C23H22ClFN5O4",
+        weight: "471.9",
+        heavyAtoms: "34",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methylpiperazinyl methoxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1N1CCN(C)CC1",
+        formula: "C24H25ClFN6O3",
+        weight: "498.94",
+        heavyAtoms: "36",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro diethylamino methoxy pyrimidine urea",
+        smiles: "CCN(CC)c1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C24H26ClFN5O3",
+        weight: "485.94",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro pyridinonyl methoxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1N1CC=C(=O)CC1",
+        formula: "C24H20ClFN5O4",
+        weight: "497.89",
+        heavyAtoms: "36",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxypiperidinyl methoxy pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1N1CCC(OC)CC1",
+        formula: "C26H28ClFN5O4",
+        weight: "529.97",
+        heavyAtoms: "38",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methyldisulfanyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CSSC",
+        formula: "C20H17ClFN4O3S2",
+        weight: "479.94",
+        heavyAtoms: "32",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy phenylthiomethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CSc1ccccc1",
+        formula: "C26H21ClFN4O3S",
+        weight: "523.99",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy piperazinylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CN1CCNCC1",
+        formula: "C24H25ClFN6O3",
+        weight: "499.94",
+        heavyAtoms: "36",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy pentylpiperazinylmethyl pyrimidine urea",
+        smiles: "CCCCCN1CCN(Cc2cc(Oc3ccc(NC(=O)Nc4ccc(Cl)c(F)c4)cc3)cnc2OC)CC1",
+        formula: "C30H37ClFN6O3",
+        weight: "583.1",
+        heavyAtoms: "42",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy morpholinylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CN1CCOCC1",
+        formula: "C24H24ClFN5O4",
+        weight: "499.92",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy methylpiperazinylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1CN1CCN(C)CC1",
+        formula: "C26H28ClFN6O3",
+        weight: "526.99",
+        heavyAtoms: "38",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy diethylaminomethyl pyrimidine urea",
+        smiles: "CCN(CC)Cc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C25H28ClFN5O3",
+        weight: "501.96",
+        heavyAtoms: "36",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy pyridinonylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CN1C=CC(=O)CC1",
+        formula: "C25H22ClFN5O4",
+        weight: "510.92",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy piperidonylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CN1CCC(=O)CC1",
+        formula: "C25H24ClFN5O4",
+        weight: "512.94",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy fluoropiperidinylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CN1CCC(OF)CC1",
+        formula: "C24H23ClF2N5O4",
+        weight: "518.91",
+        heavyAtoms: "37",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy naphthylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1cccc2ccccc12",
+        formula: "C30H22ClFN4O3",
+        weight: "540.97",
+        heavyAtoms: "39",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy naphthylthiomethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CSc1ccc2ccccc2c1",
+        formula: "C30H23ClFN4O3S",
+        weight: "573.04",
+        heavyAtoms: "40",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy nitro-piperidinyl-fluorophenylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1cc([N+](=O)[O-])c(N2CCCCC2)cc1F",
+        formula: "C31H27ClF2N6O6",
+        weight: "652.03",
+        heavyAtoms: "47",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methylpiperazinylphenylmethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1Cc1ccccc1N1CCN(C)CC1",
+        formula: "C32H32ClFN7O3",
+        weight: "616.09",
+        heavyAtoms: "44",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy hydroxyethylthiomethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1SCCO",
+        formula: "C22H20ClFN4O4S",
+        weight: "490.93",
+        heavyAtoms: "33",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy hydroxypropylthiomethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1CSC(C)O",
+        formula: "C23H22ClFN4O4S",
+        weight: "504.96",
+        heavyAtoms: "34",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy hydroxy-phenylpropylthiomethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CSC[C@H](O)c1ccccc1",
+        formula: "C29H26ClFN4O4S",
+        weight: "581.04",
+        heavyAtoms: "40",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy hydroxy-fluoropropylthiomethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1CSC[C@@H](O)CF",
+        formula: "C24H22ClF2N4O4S",
+        weight: "535.96",
+        heavyAtoms: "36",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy dihydroxypropenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1/C=C(/CO)CO",
+        formula: "C23H21ClFN4O5",
+        weight: "487.88",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy diphenylethenyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C=C(c1ccccc1)c1ccccc1",
+        formula: "C33H25ClFN4O3",
+        weight: "596.02",
+        heavyAtoms: "42",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl methoxyphenyl propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(OC)cc1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C33H33ClFN4O7",
+        weight: "650.08",
+        heavyAtoms: "45",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl chlorophenyl propionate pyrimidine urea",
+        smiles: "COCC(Cc1cccc(Cl)c1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C33H32Cl2FN4O7",
+        weight: "670.53",
+        heavyAtoms: "47",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl dimethylaminophenyl propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(N(C)C)cc1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C35H38ClFN5O7",
+        weight: "680.15",
+        heavyAtoms: "48",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl fluorophenyl propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(F)cc1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C33H32ClF2N4O7",
+        weight: "654.07",
+        heavyAtoms: "46",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl methoxyphenyl methoxyimino propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(OC)cc1)/C(=N/OC)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C35H38ClFN5O8",
+        weight: "710.15",
+        heavyAtoms: "49",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl fluorophenyl methoxyimino propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(F)cc1)/C(=N/OC)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C35H35ClF2N5O8",
+        weight: "715.12",
+        heavyAtoms: "50",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl pyrrolidinylphenyl propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(N2CCCC2)cc1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C37H40ClFN5O7",
+        weight: "712.19",
+        heavyAtoms: "50",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl cyclopentylphenyl propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(C2CCCC2)cc1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C38H41ClFN4O7",
+        weight: "719.2",
+        heavyAtoms: "50",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl dimethylaminophenyl propionate pyrimidine urea 2",
+        smiles: "COCC(Cc1ccc(N(C)C)cc1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C35H38ClFN5O7",
+        weight: "680.15",
+        heavyAtoms: "48",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyethyl methylaminophenyl propionate pyrimidine urea",
+        smiles: "COCC(Cc1ccc(NC)cc1)C(=O)OCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C34H36ClFN5O7",
+        weight: "665.13",
+        heavyAtoms: "47",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy dimethylcarbamoyl ethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CCC(=O)N(C)C",
+        formula: "C24H24ClFN5O4",
+        weight: "499.92",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoromethyl methoxy hydroxycarbamoyl ethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(CF)c3)cc2)cc1CCC(=O)NO",
+        formula: "C22H19ClF2N5O5",
+        weight: "505.86",
+        heavyAtoms: "34",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxycarbamoyl ethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CCC(=O)NOC",
+        formula: "C23H22ClFN5O5",
+        weight: "502.89",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy piperidinylcarbonyl ethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CCC(=O)N1CCCCC1",
+        formula: "C27H28ClFN5O4",
+        weight: "540.98",
+        heavyAtoms: "38",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy piperazinylcarbonyl ethyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CCC(=O)N1CCNCC1",
+        formula: "C26H27ClFN6O4",
+        weight: "541.97",
+        heavyAtoms: "38",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy ethyl methyl oxime pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CCC(C)=NO",
+        formula: "C23H22ClFN5O4",
+        weight: "487.89",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy ethyl methyl methoxyoxime pyrimidine urea",
+        smiles: "CO/N=C(/C)CCc1cc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cnc1OC",
+        formula: "C24H24ClFN5O4",
+        weight: "499.92",
+        heavyAtoms: "35",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy ethyl methyl dichlorophenylhydrazone pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CC/C(C)=N\Nc1cc(Cl)cc(Cl)c1",
+        formula: "C28H25Cl3FN6O3",
+        weight: "600.88",
+        heavyAtoms: "42",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methyl dichlorophenylhydrazone pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1CC(C)=NNc1cc(Cl)ccc1Cl",
+        formula: "C27H23Cl3FN6O3",
+        weight: "586.85",
+        heavyAtoms: "41",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy chlorophenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc(Cl)cc1)c1ccccc1",
+        formula: "C32H24Cl2FN6O3",
+        weight: "619.47",
+        heavyAtoms: "44",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy dichlorophenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc(Cl)c(Cl)c1)c1ccccc1",
+        formula: "C32H23Cl3FN6O3",
+        weight: "652.92",
+        heavyAtoms: "45",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methoxyphenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ccc(NN=C(c2ccccc2)c2cc(Oc3ccc(NC(=O)Nc4ccc(Cl)c(F)c4)cc3)cnc2OC)cc1",
+        formula: "C33H27ClFN6O4",
+        weight: "614.04",
+        heavyAtoms: "43",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methylthiophenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc(SC)cc1)c1ccccc1",
+        formula: "C33H27ClFN6O3S",
+        weight: "631.11",
+        heavyAtoms: "44",
+        elements: "C, H, Cl, F, N, O, S",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy acetylphenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc(C(C)=O)cc1)c1ccccc1",
+        formula: "C34H27ClFN6O4",
+        weight: "626.05",
+        heavyAtoms: "45",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy methylphenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc(C)cc1)c1ccccc1",
+        formula: "C33H27ClFN6O3",
+        weight: "597.04",
+        heavyAtoms: "43",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy nitrophenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc([N+](=O)[O-])cc1)c1ccccc1",
+        formula: "C32H24ClFN7O6",
+        weight: "630.01",
+        heavyAtoms: "46",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy dimethylaminophenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc(N(C)C)cc1)c1ccccc1",
+        formula: "C34H30ClFN7O3",
+        weight: "627.09",
+        heavyAtoms: "45",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy pentafluorophenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1/C(=N\Nc1c(F)c(F)c(F)c(F)c1F)c1ccccc1",
+        formula: "C32H19ClF6N6O3",
+        weight: "682.97",
+        heavyAtoms: "45",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    },
+    {
+        name: "Chloro-fluoro methoxy fluoromethylphenylhydrazone benzyl pyrimidine urea",
+        smiles: "COc1ncc(Oc2ccc(NC(=O)Nc3ccc(Cl)c(F)c3)cc2)cc1C(=NNc1ccc(CF)cc1)c1ccccc1",
+        formula: "C33H26ClF2N6O3",
+        weight: "628.04",
+        heavyAtoms: "45",
+        elements: "C, H, Cl, F, N, O",
+        type: "Compound"
+    }
+
+            // ALL YOUR COMPOUNDS GO HERE
+            // I'll show you the format below
+        ];
+
+        // ============================================
+        // AUTO-GENERATE DATABASE
+        // ============================================
+        let database = [];
+
+        function initDatabase() {
+            database = compoundsData.map((c, i) => ({ ...c, id: i + 1 }));
+            document.getElementById('loading').style.display = 'none';
+            displayAll();
+            showStatus(`✅ Loaded ${database.length} compounds`, 'success');
+            console.log('✅ Loaded', database.length, 'compounds');
+        }
+
+        // ============================================
+        // IMAGE FUNCTIONS
+        // ============================================
+        
+        function getImageUrl(compoundName) {
+            if (!compoundName) return IMAGE_FOLDER + 'default.jpg';
+            
+            let name = compoundName.trim();
+            
+            const variations = [
+                name,
+                name.replace(/ /g, ''),
+                name.replace(/ /g, '-'),
+                name.replace(/ /g, '_'),
+                name.toLowerCase(),
+                name.toLowerCase().replace(/ /g, ''),
+                name.toLowerCase().replace(/ /g, '-'),
+                name.toLowerCase().replace(/ /g, '_'),
+            ];
+            
+            const uniqueVariations = [...new Set(variations)];
+            const extensions = ['.jpg', '.jpeg', '.png'];
+            
+            for (let ext of extensions) {
+                for (let v of uniqueVariations) {
+                    return IMAGE_FOLDER + encodeURIComponent(v + ext);
+                }
+            }
+            
+            return IMAGE_FOLDER + 'default.jpg';
+        }
+
+        // ============================================
+        // DISPLAY FUNCTIONS
+        // ============================================
+        
+        function displayAll() {
+            displayResults(database);
+        }
+
+        function displayResults(results) {
+            const grid = document.getElementById('results');
+            const noResults = document.getElementById('noResults');
+            
+            if (!results || results.length === 0) {
+                grid.innerHTML = '';
+                noResults.style.display = 'block';
+                return;
+            }
+            
+            noResults.style.display = 'none';
+            
+            grid.innerHTML = results.map(c => {
+                const imageUrl = getImageUrl(c.name);
+                return `
+                    <div class="card" onclick="showDetail(${c.id})">
+                        <img src="${imageUrl}" 
+                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect width=%22200%22 height=%22200%22 fill=%22%23f7fafc%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%234a5568%22 font-size=%2214%22%3ENo Image%3C/text%3E%3C/svg%3E'"
+                             alt="${c.name}">
+                        <h3>${c.name}</h3>
+                        <div class="info">Formula: ${c.formula || 'N/A'}</div>
+                        <div class="info">MW: ${c.weight || 'N/A'}</div>
+                        <div class="info">Elements: ${c.elements || 'N/A'}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showDetail(id) {
+            const c = database.find(d => d.id === id);
+            if (!c) return;
+            
+            const detail = document.getElementById('detail');
+            const imageUrl = getImageUrl(c.name);
+            
+            detail.innerHTML = `
+                <h2>${c.name}</h2>
+                <div class="detail-grid">
+                    <div>
+                        <div class="info">
+                            <div class="info-item"><strong>Type:</strong> ${c.type || 'N/A'}</div>
+                            <div class="info-item"><strong>Formula:</strong> ${c.formula || 'N/A'}</div>
+                            <div class="info-item"><strong>Weight:</strong> ${c.weight || 'N/A'} g/mol</div>
+                            <div class="info-item"><strong>Heavy Atoms:</strong> ${c.heavyAtoms || 'N/A'}</div>
+                            <div class="info-item"><strong>Elements:</strong> ${c.elements || 'N/A'}</div>
+                            <div class="info-item"><strong>SMILES:</strong> <small style="word-break:break-all;">${c.smiles || 'N/A'}</small></div>
+                        </div>
+                    </div>
+                    <div>
+                        <img src="${imageUrl}" 
+                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect width=%22300%22 height=%22300%22 fill=%22%23f7fafc%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%234a5568%22 font-size=%2216%22%3ENo Image%3C/text%3E%3C/svg%3E'"
+                             alt="${c.name}">
+                        <p style="margin-top:10px; font-size:0.9rem; opacity:0.8;">${c.name}</p>
+                    </div>
+                </div>
+            `;
+            detail.classList.add('active');
+            detail.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ============================================
+        // SEARCH
+        // ============================================
+        
+        function searchFlavonoids() {
+            const term = document.getElementById('search').value.toLowerCase().trim();
+            if (!term) {
+                displayResults(database);
+                document.getElementById('detail').classList.remove('active');
+                return;
+            }
+            
+            const results = database.filter(c => {
+                const searchable = [
+                    c.name, c.type, c.formula, c.smiles, c.elements, 
+                    c.source, c.activity, c.weight, c.heavyAtoms
+                ].join(' ').toLowerCase();
+                return searchable.includes(term);
+            });
+            
+            displayResults(results);
+            document.getElementById('detail').classList.remove('active');
+        }
+
+        function searchTerm(term) {
+            document.getElementById('search').value = term;
+            searchFlavonoids();
+        }
+
+        // ============================================
+        // UTILITY
+        // ============================================
+        
+        function showStatus(msg, type) {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = `status ${type}`;
+            setTimeout(() => { status.className = 'status'; }, 5000);
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        document.getElementById('search').addEventListener('input', searchFlavonoids);
+        
+        // Load data
+        initDatabase();
+        
+        console.log('🔬 Flavonoid Database Ready!');
+    </script>
+</body>
+</html>
